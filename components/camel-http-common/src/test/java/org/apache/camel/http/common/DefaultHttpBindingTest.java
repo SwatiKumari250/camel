@@ -16,6 +16,8 @@
  */
 package org.apache.camel.http.common;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Locale;
 
@@ -24,6 +26,7 @@ import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.test.junit6.CamelTestSupport;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -71,6 +74,32 @@ public class DefaultHttpBindingTest extends CamelTestSupport {
         exchange.setProperty(DefaultHttpBinding.DATE_LOCALE_CONVERSION, false);
         String value = binding.convertHeaderValueToString(exchange, l);
         assertEquals(value, l.toString());
+    }
+
+    @Test
+    public void testResponseBodyUsesDeclaredContentTypeCharset() throws Exception {
+        DefaultHttpBinding binding = new DefaultHttpBinding();
+        Exchange exchange = new DefaultExchange(context);
+        exchange.setProperty(Exchange.CHARSET_NAME, StandardCharsets.UTF_8.name());
+        exchange.getMessage().setBody("Grüße");
+
+        InputStream stream = binding.getResponseBodyAsInputStream(
+                exchange.getMessage(), "application/json; CHARSET=ISO-8859-1", exchange);
+
+        assertArrayEquals("Grüße".getBytes(StandardCharsets.ISO_8859_1), stream.readAllBytes());
+    }
+
+    @Test
+    public void testResponseBodyUsesExchangeCharsetWhenContentTypeHasNoCharset() throws Exception {
+        DefaultHttpBinding binding = new DefaultHttpBinding();
+        Exchange exchange = new DefaultExchange(context);
+        exchange.setProperty(Exchange.CHARSET_NAME, StandardCharsets.ISO_8859_1.name());
+        exchange.getMessage().setBody("Grüße");
+
+        InputStream stream = binding.getResponseBodyAsInputStream(
+                exchange.getMessage(), "application/json", exchange);
+
+        assertArrayEquals("Grüße".getBytes(StandardCharsets.ISO_8859_1), stream.readAllBytes());
     }
 
     @Test
