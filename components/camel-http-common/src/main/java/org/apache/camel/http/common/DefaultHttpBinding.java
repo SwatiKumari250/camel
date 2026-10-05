@@ -16,6 +16,7 @@
  */
 package org.apache.camel.http.common;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -529,11 +530,11 @@ public class DefaultHttpBinding implements HttpBinding {
         // prefer streaming
         InputStream is = null;
         if (checkChunked(message, exchange)) {
-            is = message.getBody(InputStream.class);
+            is = getResponseBodyAsInputStream(message, contentType, exchange);
         } else {
             // try to use input stream first, so we can copy directly
             if (!isText(contentType)) {
-                is = exchange.getContext().getTypeConverter().tryConvertTo(InputStream.class, message.getBody());
+                is = getResponseBodyAsInputStream(message, contentType, exchange);
             }
         }
 
@@ -573,7 +574,7 @@ public class DefaultHttpBinding implements HttpBinding {
             String data = message.getBody(String.class);
             if (data != null) {
                 // set content length and encoding before we write data
-                String charset = ExchangeHelper.getCharsetName(exchange, true);
+                String charset = getResponseCharset(contentType, exchange);
                 final int dataByteLength = data.getBytes(charset).length;
                 response.setCharacterEncoding(charset);
                 response.setContentLength(dataByteLength);
@@ -588,6 +589,22 @@ public class DefaultHttpBinding implements HttpBinding {
                 }
             }
         }
+    }
+
+    protected InputStream getResponseBodyAsInputStream(Message message, String contentType, Exchange exchange) {
+        String charset = getResponseCharset(contentType, exchange);
+        Object body = message.getBody();
+        if (body instanceof String string) {
+            return new ByteArrayInputStream(string.getBytes(java.nio.charset.Charset.forName(charset)));
+        }
+        return exchange.getContext().getTypeConverter().tryConvertTo(InputStream.class, body);
+    }
+
+    protected String getResponseCharset(String contentType, Exchange exchange) {
+        if (contentType != null && contentType.toLowerCase(Locale.ROOT).contains("charset=")) {
+            return IOHelper.getCharsetNameFromContentType(contentType);
+        }
+        return ExchangeHelper.getCharsetName(exchange, true);
     }
 
     protected boolean checkChunked(Message message, Exchange exchange) {
